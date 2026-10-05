@@ -18,10 +18,10 @@
             (import nixpkgs-mozilla)
           ];
         };
-        naersk-lib = pkgs.callPackage naersk { };
         toolchain = (pkgs.rustChannelOf {
-          rustToolchain = ./rust-toolchain.toml;
-          sha256 = "sha256-YZARSWuUvkFUPWNVzEa0g6ii8ceU0TqmYMd4YzLxH/U=";
+          channel = "nightly";
+          date = "2026-10-05";
+          sha256 = "sha256-2XBkcfgQpF5hzNejCfabTCqchftapwoyjmHsCKsQ6pc=";
         }).rust;
         naersk' = pkgs.callPackage naersk {
           cargo = toolchain;
@@ -29,11 +29,16 @@
         };
       in
       {
-        defaultPackage = naersk-lib.buildPackage {
-		  src = ./.;
-          buildInputs = with pkgs; [ openssl pkg-config ];
-		};
-        devShell = with pkgs; mkShell {
+        packages.default = naersk'.buildPackage {
+          src = ./.;
+          nativeBuildInputs = with pkgs; [ pkg-config makeWrapper ];
+          buildInputs = with pkgs; [ openssl ];
+          postInstall = ''
+            wrapProgram $out/bin/bandrip \
+              --prefix LD_LIBRARY_PATH : ${pkgs.lib.makeLibraryPath [ pkgs.openssl ]}
+          '';
+        };
+        devShells.default = with pkgs; mkShell {
           buildInputs = [ toolchain rustfmt pre-commit rustPackages.clippy pkg-config openssl ];
           RUST_SRC_PATH = rustPlatform.rustLibSrc;
         };

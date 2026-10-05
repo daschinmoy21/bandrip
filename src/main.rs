@@ -1,8 +1,7 @@
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
 use bandcamp::TrackMetadata;
 use clap::{arg, command};
-use dirs::audio_dir;
 mod bandcamp;
 mod downloader;
 
@@ -29,23 +28,32 @@ fn main() {
         download_links.len()
     );
     for (link, metadata) in download_links.to_owned() {
-        let downloaded_file = downloader::download_from_link(link).unwrap();
-        downloader::move_and_tag_file(downloaded_file, metadata.to_owned()).unwrap();
+        let downloaded_file = match downloader::download_from_link(link) {
+            Ok(path) => path,
+            Err(err) => {
+                eprintln!("Download failed: {err}");
+                return;
+            }
+        };
+        if let Err(err) = downloader::move_and_tag_file(downloaded_file, metadata.to_owned()) {
+            eprintln!("Failed to save track: {err}");
+            return;
+        }
         println!(
             "Downloaded {} {} by {}",
             metadata.track_number, metadata.name, metadata.artist
         );
     }
-    println!(
-        "Finished downloading to {:?}",
-        get_download_dir(&download_links.first().unwrap().1).into_os_string()
-    );
+    match get_download_dir(&download_links.first().unwrap().1) {
+        Ok(dir) => println!("Finished downloading to {:?}", dir.into_os_string()),
+        Err(err) => eprintln!("Tracks downloaded, but could not resolve output dir: {err}"),
+    }
 }
 
-fn get_download_dir(metadata: &TrackMetadata) -> PathBuf {
-    let mut download_dir = audio_dir().unwrap();
+fn get_download_dir(metadata: &TrackMetadata) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
+    let mut download_dir = downloader::music_dir()?;
     download_dir.push("bandrip");
     download_dir.push(&metadata.artist);
     download_dir.push(&metadata.album);
-    download_dir
+    Ok(download_dir)
 }
